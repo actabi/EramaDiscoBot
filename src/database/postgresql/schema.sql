@@ -1,6 +1,3 @@
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 -- Drop tables if they exist
 DROP TABLE IF EXISTS mission_skills CASCADE;
 DROP TABLE IF EXISTS missions CASCADE;
@@ -27,10 +24,6 @@ CREATE TABLE mission_skills (
     skill VARCHAR(100),
     PRIMARY KEY (mission_id, skill)
 );
-
--- Set ownership
-ALTER TABLE missions OWNER TO botuser;
-ALTER TABLE mission_skills OWNER TO botuser;
 
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_missions_published ON missions(is_published);
