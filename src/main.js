@@ -1,5 +1,4 @@
 const config = require('./config');
-//const NotionMissionRepository = require('./repositories/NotionMissionRepository');
 const PostgresMissionRepository = require('./database/repositories/PostgresMissionRepository');
 const MissionService = require('./services/MissionService');
 const DiscordService = require('./services/DiscordService');
@@ -8,8 +7,9 @@ const DiscordService = require('./services/DiscordService');
  * Classe principale du bot
  */
 class MissionBot {
-  constructor(missionRepository) {
-    this.missionService = new MissionService(missionRepository);
+  constructor() {
+    const repository = new PostgresMissionRepository();
+    this.missionService = new MissionService(repository);
     this.discordService = new DiscordService();
   }
 
@@ -58,10 +58,8 @@ class MissionBot {
   }
 }
 
-// Utilisation avec Notion
-//const notionRepository = new NotionMissionRepository();
-const repository = new PostgresMissionRepository();
-const bot = new MissionBot(notionRepository);
+// Initialisation
+const bot = new MissionBot();
 
 bot.initialize()
   .then(() => {
