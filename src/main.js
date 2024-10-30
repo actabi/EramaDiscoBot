@@ -1,5 +1,6 @@
 const config = require('./config');
-const NotionMissionRepository = require('./repositories/NotionMissionRepository');
+//const NotionMissionRepository = require('./repositories/NotionMissionRepository');
+const PostgresMissionRepository = require('./database/repositories/PostgresMissionRepository');
 const MissionService = require('./services/MissionService');
 const DiscordService = require('./services/DiscordService');
 
@@ -58,7 +59,8 @@ class MissionBot {
 }
 
 // Utilisation avec Notion
-const notionRepository = new NotionMissionRepository();
+//const notionRepository = new NotionMissionRepository();
+const repository = new PostgresMissionRepository();
 const bot = new MissionBot(notionRepository);
 
 bot.initialize()
