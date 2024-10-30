@@ -1,12 +1,25 @@
 const IMissionRepository = require('../interfaces/IMissionRepository');
 
+/**
+ * Service de gestion des missions
+ */
 class MissionService {
+    /**
+     * @param {IMissionRepository} repository - Repository implémentant IMissionRepository
+     */
     constructor(repository) {
         // Vérifie que le repository implémente bien l'interface
         if (!(repository instanceof IMissionRepository)) {
             throw new Error('Repository must implement IMissionRepository');
         }
         this.repository = repository;
+        
+        // Constantes de validation
+        this.VALIDATION = {
+            MIN_DESCRIPTION_LENGTH: 50,
+            MIN_PRICE: 0,
+            MAX_PRICE: 100000
+        };
     }
 
     /**
@@ -15,28 +28,29 @@ class MissionService {
      */
     async getUnpublishedMissions() {
         try {
+            console.log('Fetching unpublished missions...');
             const missions = await this.repository.getUnpublishedMissions();
+            console.log(`Found ${missions.length} unpublished missions`);
             
-            // Filtre les missions invalides
-            return missions.filter(mission => {
-                // Vérifie les champs obligatoires
-                if (!mission.title || !mission.description) {
-                    console.warn(`Mission ${mission.id} skipped: missing required fields`);
+            const validMissions = missions.filter(mission => {
+                const validation = this.validateMission(mission);
+                if (!validation.isValid) {
+                    console.warn(`Mission ${mission.id} skipped:`, validation.errors);
                     return false;
                 }
-
-                // Vérifie le prix
-                if (mission.price && (mission.price < 0 || mission.price > 100000)) {
-                    console.warn(`Mission ${mission.id} skipped: invalid price range`);
-                    return false;
+                
+                if (validation.warnings.length > 0) {
+                    console.warn(`Mission ${mission.id} warnings:`, validation.warnings);
                 }
 
-                // Autres validations métier
                 return true;
             });
+
+            console.log(`Returning ${validMissions.length} valid missions`);
+            return validMissions;
         } catch (error) {
             console.error('Error in getUnpublishedMissions:', error);
-            throw new Error('Failed to fetch unpublished missions');
+            throw new Error(`Failed to fetch unpublished missions: ${error.message}`);
         }
     }
 
@@ -48,7 +62,7 @@ class MissionService {
      */
     async updateMissionStatus(mission, discordMessageId) {
         try {
-            if (!mission || !mission.id) {
+            if (!mission?.id) {
                 throw new Error('Invalid mission object');
             }
 
@@ -56,7 +70,11 @@ class MissionService {
                 throw new Error('Discord message ID is required');
             }
 
-            // Vérifie si la mission n'est pas déjà publiée
+            const validation = this.validateMission(mission);
+            if (!validation.isValid) {
+                throw new Error(`Invalid mission: ${validation.errors.join(', ')}`);
+            }
+
             if (mission.isPublished) {
                 console.warn(`Mission ${mission.id} is already published`);
                 return false;
@@ -65,30 +83,36 @@ class MissionService {
             const updated = await this.repository.updateMissionStatus(mission, discordMessageId);
             
             if (updated) {
-                this.logMissionUpdate(mission, discordMessageId);
+                await this.logMissionUpdate(mission, discordMessageId);
+                console.log(`Mission ${mission.id} successfully updated with Discord message ID ${discordMessageId}`);
             }
 
             return updated;
         } catch (error) {
             console.error(`Error updating mission ${mission?.id}:`, error);
-            throw new Error('Failed to update mission status');
+            throw new Error(`Failed to update mission status: ${error.message}`);
         }
     }
 
     /**
      * Recherche des missions par critères
      * @param {Object} criteria - Critères de recherche
+     * @param {string[]} [criteria.skills] - Compétences requises
+     * @param {string} [criteria.location] - Localisation
+     * @param {number} [criteria.minPrice] - Prix minimum
+     * @param {number} [criteria.maxPrice] - Prix maximum
      * @returns {Promise<Array>} Missions correspondantes
      */
     async searchMissions(criteria) {
         try {
+            console.log('Searching missions with criteria:', criteria);
             const missions = await this.repository.getUnpublishedMissions();
             
-            return missions.filter(mission => {
+            const filteredMissions = missions.filter(mission => {
                 // Filtre par compétences
-                if (criteria.skills && criteria.skills.length > 0) {
+                if (criteria.skills?.length > 0) {
                     const hasRequiredSkills = criteria.skills.every(
-                        skill => mission.skills.includes(skill)
+                        skill => mission.skills?.includes(skill)
                     );
                     if (!hasRequiredSkills) return false;
                 }
@@ -99,45 +123,59 @@ class MissionService {
                 }
 
                 // Filtre par fourchette de prix
-                if (criteria.minPrice && mission.price < criteria.minPrice) {
+                if (criteria.minPrice != null && (mission.price == null || mission.price < criteria.minPrice)) {
                     return false;
                 }
-                if (criteria.maxPrice && mission.price > criteria.maxPrice) {
+                if (criteria.maxPrice != null && (mission.price == null || mission.price > criteria.maxPrice)) {
                     return false;
                 }
 
                 return true;
             });
+
+            console.log(`Found ${filteredMissions.length} missions matching criteria`);
+            return filteredMissions;
         } catch (error) {
             console.error('Error in searchMissions:', error);
-            throw new Error('Failed to search missions');
+            throw new Error(`Failed to search missions: ${error.message}`);
         }
     }
 
     /**
-     * Valide une mission avant publication
+     * Valide une mission
      * @param {Mission} mission - La mission à valider
-     * @returns {Object} Résultat de la validation
+     * @returns {Object} Résultat de la validation {isValid, errors, warnings}
      */
     validateMission(mission) {
         const errors = [];
         const warnings = [];
 
+        // Vérifications essentielles
+        if (!mission) {
+            errors.push('Mission object is required');
+            return { isValid: false, errors, warnings };
+        }
+
         // Vérifie les champs obligatoires
         if (!mission.title) errors.push('Title is required');
         if (!mission.description) errors.push('Description is required');
+        if (!mission.id) errors.push('ID is required');
         
         // Vérifie les formats
-        if (mission.price && typeof mission.price !== 'number') {
-            errors.push('Price must be a number');
+        if (mission.price != null) {
+            if (typeof mission.price !== 'number') {
+                errors.push('Price must be a number');
+            } else if (mission.price < this.VALIDATION.MIN_PRICE || mission.price > this.VALIDATION.MAX_PRICE) {
+                errors.push(`Price must be between ${this.VALIDATION.MIN_PRICE} and ${this.VALIDATION.MAX_PRICE}`);
+            }
         }
 
         // Avertissements pour les bonnes pratiques
-        if (mission.description && mission.description.length < 50) {
-            warnings.push('Description is quite short, consider adding more details');
+        if (mission.description && mission.description.length < this.VALIDATION.MIN_DESCRIPTION_LENGTH) {
+            warnings.push(`Description is quite short (${mission.description.length} chars), consider adding more details`);
         }
         
-        if (!mission.skills || mission.skills.length === 0) {
+        if (!mission.skills?.length) {
             warnings.push('No skills specified');
         }
 
@@ -150,20 +188,23 @@ class MissionService {
 
     /**
      * Log les mises à jour de mission pour audit
+     * @param {Mission} mission - La mission mise à jour
+     * @param {string} discordMessageId - L'ID du message Discord
      * @private
      */
-    logMissionUpdate(mission, discordMessageId) {
+    async logMissionUpdate(mission, discordMessageId) {
         const updateLog = {
-            timestamp: new Date(),
+            timestamp: new Date().toISOString(),
             missionId: mission.id,
-            discordMessageId: discordMessageId,
+            discordMessageId,
             title: mission.title,
-            action: 'PUBLICATION'
+            action: 'PUBLICATION',
+            status: mission.isPublished ? 'PUBLISHED' : 'PENDING'
         };
         
-        console.log('Mission Update:', JSON.stringify(updateLog));
-        // Ici vous pourriez ajouter la persistance des logs dans un fichier
-        // ou une base de données
+        console.log('Mission Update:', JSON.stringify(updateLog, null, 2));
+        // TODO: Implémenter la persistance des logs
+        // Exemple: await this.logRepository.save(updateLog);
     }
 }
 

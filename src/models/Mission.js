@@ -33,6 +33,10 @@ class Mission {
         this.createdAt = createdAt;
     }
 
+    /**
+     * Convertit l'objet Mission en objet JSON
+     * @returns {Object} Représentation JSON de la mission
+     */
     toJSON() {
         return {
             id: this.id,
@@ -49,6 +53,41 @@ class Mission {
             discordMessageId: this.discordMessageId,
             createdAt: this.createdAt
         };
+    }
+
+    /**
+     * Vérifie si la mission est valide
+     * @returns {Object} Résultat de la validation {isValid: boolean, errors: string[]}
+     */
+    validate() {
+        const errors = [];
+
+        if (!this.id) errors.push('ID is required');
+        if (!this.title) errors.push('Title is required');
+        if (!this.description) errors.push('Description is required');
+        if (this.price && typeof this.price !== 'number') errors.push('Price must be a number');
+
+        return {
+            isValid: errors.length === 0,
+            errors
+        };
+    }
+
+    /**
+     * Marque la mission comme publiée
+     * @param {string} discordMessageId - ID du message Discord
+     */
+    markAsPublished(discordMessageId) {
+        this.isPublished = true;
+        this.discordMessageId = discordMessageId;
+    }
+
+    /**
+     * Crée une copie de la mission
+     * @returns {Mission} Nouvelle instance de Mission
+     */
+    clone() {
+        return new Mission(this.toJSON());
     }
 }
 
