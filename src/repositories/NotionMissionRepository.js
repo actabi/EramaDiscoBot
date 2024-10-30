@@ -1,5 +1,5 @@
 const { Client } = require("@notionhq/client");
-const IMissionRepository = require('../interfaces/IMissionRepository');
+const IMissionRepository = require('../interfaces/iMissionRepository');
 const Mission = require('../models/Mission');
 const config = require('../config');
 

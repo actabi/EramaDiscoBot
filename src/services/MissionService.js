@@ -1,4 +1,4 @@
-const IMissionRepository = require('../interfaces/IMissionRepository');
+const IMissionRepository = require('../interfaces/iMissionRepository');
 
 /**
  * Service de gestion des missions
