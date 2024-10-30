@@ -12,10 +12,11 @@ echo -e "${GREEN}=== Extension de la Base de Données pour l'Interface Web ===${
 # 1. Chargement des variables d'environnement
 echo -e "\n${YELLOW}1. Chargement de la configuration...${NC}"
 if [ -f ../.env ]; then
-    export $(cat ../bot/.env | grep -v '^#' | xargs)
-    echo -e "${GREEN}✓ Fichier .env chargé${NC}"
+    export $(cat ../.env | grep -v '^#' | xargs)
+    echo -e "${GREEN}✓ Fichier .env chargé depuis ../.env${NC}"
 else
-    echo -e "${RED}✗ Fichier .env non trouvé dans ../bot/.env${NC}"
+    echo -e "${RED}✗ Fichier .env non trouvé dans ../.env${NC}"
+    echo -e "Le script doit être exécuté depuis le répertoire /bot/web"
     exit 1
 fi
 
@@ -29,8 +30,16 @@ check_command() {
     fi
 }
 
-# 2. Vérification de la connexion
-echo -e "\n${YELLOW}2. Vérification de la connexion à PostgreSQL...${NC}"
+# 2. Vérification du répertoire
+echo -e "\n${YELLOW}2. Vérification de l'emplacement...${NC}"
+if [[ ! -d "../src" ]]; then
+    echo -e "${RED}✗ Le script doit être exécuté depuis le répertoire /bot/web${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ Emplacement correct${NC}"
+
+# 3. Vérification de la connexion
+echo -e "\n${YELLOW}3. Vérification de la connexion à PostgreSQL...${NC}"
 if PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DB -c '\q'; then
     echo -e "${GREEN}✓ Connexion réussie à PostgreSQL${NC}"
 else
@@ -43,17 +52,18 @@ else
     exit 1
 fi
 
-# 3. Sauvegarde de la base existante
-echo -e "\n${YELLOW}3. Création d'une sauvegarde de sécurité...${NC}"
-BACKUP_DIR="../postgresSql/backups"
+# 4. Sauvegarde de la base existante
+echo -e "\n${YELLOW}4. Création d'une sauvegarde de sécurité...${NC}"
+BACKUP_DIR="../../postgresSql/backups"
 mkdir -p $BACKUP_DIR
 BACKUP_FILE="$BACKUP_DIR/backup_before_web_extension_$(date +%Y%m%d_%H%M%S).sql"
 PGPASSWORD=$POSTGRES_PASSWORD pg_dump -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DB > $BACKUP_FILE
 check_command "Sauvegarde de la base de données"
 
-# 4. Création du fichier SQL temporaire pour l'extension du schéma
-echo -e "\n${YELLOW}4. Préparation du script d'extension...${NC}"
-cat << 'EOF' > extend_schema.sql
+# 5. Création du fichier SQL temporaire pour l'extension du schéma
+echo -e "\n${YELLOW}5. Préparation du script d'extension...${NC}"
+TEMP_SQL_FILE="./extend_schema.sql"
+cat << 'EOF' > $TEMP_SQL_FILE
 -- Extension du schéma existant pour le support web
 DO $$ 
 BEGIN
@@ -165,24 +175,25 @@ FROM missions m
 LEFT JOIN mission_applications ma ON m.id = ma.mission_id
 GROUP BY m.id, m.title;
 
--- Accorder les droits nécessaires au même utilisateur que le bot
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO $POSTGRES_USER;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO $POSTGRES_USER;
+-- Accorder les droits nécessaires
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO current_user;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO current_user;
 EOF
 
-# 5. Exécution du script d'extension
-echo -e "\n${YELLOW}5. Extension du schéma de la base de données...${NC}"
-PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DB -f extend_schema.sql
+# 6. Exécution du script d'extension
+echo -e "\n${YELLOW}6. Extension du schéma de la base de données...${NC}"
+PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DB -f $TEMP_SQL_FILE
 check_command "Extension du schéma"
 
-# 6. Ajout des interfaces et repositories
-echo -e "\n${YELLOW}6. Création des fichiers TypeScript...${NC}"
+# 7. Ajout des interfaces et repositories
+echo -e "\n${YELLOW}7. Création des fichiers TypeScript...${NC}"
 
 # Création du dossier interfaces s'il n'existe pas
-mkdir -p ../bot/src/interfaces
+mkdir -p ../src/interfaces
 
 # Création de l'interface IFreelancerRepository
-cat << 'EOF' > ../bot/src/interfaces/iFreelancerRepository.ts
+mkdir -p ../src/interfaces
+cat << 'EOF' > ../src/interfaces/iFreelancerRepository.ts
 interface IFreelancerRepository {
     createProfile(profile: any, userId: string): Promise<string>;
     applyToMission(freelancerId: string, missionId: string, message?: string): Promise<boolean>;
@@ -195,8 +206,8 @@ export default IFreelancerRepository;
 EOF
 
 # Création du repository
-mkdir -p ../bot/src/database/repositories
-cat << 'EOF' > ../bot/src/database/repositories/PostgresFreelancerRepository.ts
+mkdir -p ../src/database/repositories
+cat << 'EOF' > ../src/database/repositories/PostgresFreelancerRepository.ts
 import { pool } from '../postgresql/connection';
 import IFreelancerRepository from '../../interfaces/iFreelancerRepository';
 
@@ -313,19 +324,19 @@ EOF
 
 check_command "Création des fichiers TypeScript"
 
-# 7. Nettoyage
-echo -e "\n${YELLOW}7. Nettoyage des fichiers temporaires...${NC}"
-rm extend_schema.sql
+# 8. Nettoyage
+echo -e "\n${YELLOW}8. Nettoyage des fichiers temporaires...${NC}"
+rm $TEMP_SQL_FILE
 check_command "Nettoyage"
 
 echo -e "\n${GREEN}=== Installation terminée avec succès ===${NC}"
 echo -e "${YELLOW}Actions effectuées :${NC}"
-echo "1. Configuration chargée depuis ../bot/.env"
+echo "1. Configuration chargée depuis ../.env"
 echo "2. Sauvegarde créée dans : $BACKUP_FILE"
 echo "3. Nouvelles tables créées : users, freelancer_profiles, freelancer_skills, mission_applications"
 echo "4. Vues créées : view_freelancer_missions, view_mission_stats"
-echo "5. Interface et Repository TypeScript créés dans ../bot/src/"
+echo "5. Interface et Repository TypeScript créés dans ../src/"
 echo -e "\n${YELLOW}Notes importantes :${NC}"
 echo "- Une sauvegarde a été créée dans : $BACKUP_FILE"
 echo "- En cas de problème, restaurez avec : PGPASSWORD=\$POSTGRES_PASSWORD psql -h \$POSTGRES_HOST -U \$POSTGRES_USER -d \$POSTGRES_DB < $BACKUP_FILE"
-echo "- Les nouveaux fichiers TypeScript sont dans ../bot/src/"
+echo "- Les nouveaux fichiers TypeScript sont dans ../src/"
