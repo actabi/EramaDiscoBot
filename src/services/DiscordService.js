@@ -175,29 +175,32 @@ class DiscordService {
      */
     async sendMission(mission) {
         try {
-            this.checkConnection();
-            const channel = await this.getChannel(config.DISCORD.CHANNEL_ID);
-
-            const embed = this.createMissionEmbed(mission);
-            const message = await channel.send({ embeds: [embed] });
-
-            const threadName = `Discussion - ${mission.title || 'Mission'}`
-                .substring(0, 100);
-
+          this.checkConnection();
+          const channel = await this.getChannel(config.DISCORD.CHANNEL_ID);
+      
+          const embed = this.createMissionEmbed(mission);
+          const message = await channel.send({ embeds: [embed] });
+      
+          const threadName = `Discussion - ${mission.title || 'Mission'}`.substring(0, 100);
+      
+          try {
             await message.startThread({
-                name: threadName,
-                autoArchiveDuration: 10080,
-                reason: `Thread créé pour la mission: ${mission.id}`
+              name: threadName,
+              autoArchiveDuration: 10080,
+              reason: `Thread créé pour la mission: ${mission.id}`,
             });
-
-            console.log(`Mission ${mission.id} sent successfully. Message ID: ${message.id}`);
-            return message.id;
-
+          } catch (threadError) {
+            console.error(`Failed to start thread for mission ${mission.id}:`, threadError);
+            // Vous pouvez choisir de continuer ou de lancer une exception ici
+          }
+      
+          console.log(`Mission ${mission.id} sent successfully. Message ID: ${message.id}`);
+          return message.id;
         } catch (error) {
-            console.error(`Error sending mission ${mission?.id}:`, error);
-            throw new Error(`Failed to send mission: ${error.message}`);
+          console.error(`Error sending mission ${mission?.id}:`, error);
+          throw new Error(`Failed to send mission: ${error.message}`);
         }
-    }
+      }
 
     /**
      * Met à jour un message existant sur Discord

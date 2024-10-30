@@ -28,31 +28,31 @@ class MissionService {
      */
     async getUnpublishedMissions() {
         try {
-            console.log('Fetching unpublished missions...');
-            const missions = await this.repository.getUnpublishedMissions();
-            console.log(`Found ${missions.length} unpublished missions`);
-            
-            const validMissions = missions.filter(mission => {
-                const validation = this.validateMission(mission);
-                if (!validation.isValid) {
-                    console.warn(`Mission ${mission.id} skipped:`, validation.errors);
-                    return false;
-                }
-                
-                if (validation.warnings.length > 0) {
-                    console.warn(`Mission ${mission.id} warnings:`, validation.warnings);
-                }
-
-                return true;
-            });
-
-            console.log(`Returning ${validMissions.length} valid missions`);
-            return validMissions;
+          console.log('Fetching unpublished missions...');
+          const missions = await this.repository.getUnpublishedMissions();
+          console.log(`Found ${missions.length} unpublished missions`);
+      
+          const validMissions = missions.filter(mission => {
+            const validation = this.validateMission(mission);
+            if (!validation.isValid) {
+              console.warn(`Mission ${mission.id} skipped:`, validation.errors.join(', '));
+              return false;
+            }
+      
+            if (validation.warnings.length > 0) {
+              console.warn(`Mission ${mission.id} warnings:`, validation.warnings.join(', '));
+            }
+      
+            return true;
+          });
+      
+          console.log(`Returning ${validMissions.length} valid missions`);
+          return validMissions;
         } catch (error) {
-            console.error('Error in getUnpublishedMissions:', error);
-            throw new Error(`Failed to fetch unpublished missions: ${error.message}`);
+          console.error('Error in getUnpublishedMissions:', error);
+          throw new Error(`Failed to fetch unpublished missions: ${error.message}`);
         }
-    }
+      }
 
     /**
      * Met à jour le statut d'une mission avec validation

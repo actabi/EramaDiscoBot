@@ -22,21 +22,22 @@ class NotionMissionRepository extends IMissionRepository {
      */
     convertNotionToMission(notionPage) {
         try {
+            // Dans convertNotionToMission()
             const mission = new Mission({
                 id: notionPage.id,
-                title: notionPage.properties.Title?.title[0]?.text?.content,
-                description: notionPage.properties.Description?.rich_text[0]?.text?.content,
-                skills: notionPage.properties.Skills?.multi_select.map(skill => skill.name) || [],
-                experienceLevel: notionPage.properties.Experience_level?.rich_text[0]?.text?.content,
-                duration: notionPage.properties.Duration?.rich_text[0]?.text?.content,
-                location: notionPage.properties.Localisation?.select?.name,
-                price: notionPage.properties.Price?.number,
-                workType: notionPage.properties.Work?.select?.name,
-                missionType: notionPage.properties.Type_of_?.select?.name,
-                isPublished: notionPage.properties.DiscordPublication?.checkbox,
-                discordMessageId: notionPage.properties.DiscordIdMessage?.number,
-                createdAt: new Date(notionPage.created_time)
-            });
+                title: notionPage.properties.Title?.title?.[0]?.text?.content || 'Sans titre',
+                description: notionPage.properties.Description?.rich_text?.[0]?.text?.content || '',
+                skills: notionPage.properties.Skills?.multi_select?.map(skill => skill.name) || [],
+                experienceLevel: notionPage.properties.Experience_level?.rich_text?.[0]?.text?.content || '',
+                duration: notionPage.properties.Duration?.rich_text?.[0]?.text?.content || '',
+                location: notionPage.properties.Localisation?.select?.name || '',
+                price: notionPage.properties.Price?.number || null,
+                workType: notionPage.properties.Work?.select?.name || '',
+                missionType: notionPage.properties.Type_of_?.select?.name || '',
+                isPublished: notionPage.properties.DiscordPublication?.checkbox || false,
+                discordMessageId: notionPage.properties.DiscordIdMessage?.number || null,
+                createdAt: new Date(notionPage.created_time),
+            });  
 
             // Valider la mission avant de la retourner
             const validation = mission.validate();
@@ -52,79 +53,52 @@ class NotionMissionRepository extends IMissionRepository {
     }
 
     /**
-     * Récupère les missions non publiées
+     * Récupère les missions non publiées avec pagination
      * @returns {Promise<Mission[]>} Liste des missions non publiées
      * @override
      */
     async getUnpublishedMissions() {
         try {
+        let hasMore = true;
+        let startCursor = undefined;
+        const missions = [];
+    
+        while (hasMore) {
             const response = await this.client.databases.query({
-                database_id: this.database_id,
-                filter: {
-                    property: "DiscordPublication",
-                    checkbox: { equals: false }
-                },
-                sorts: [{ property: "Created Time", direction: "ascending" }]
+            database_id: this.database_id,
+            filter: {
+                property: 'DiscordPublication',
+                checkbox: { equals: false },
+            },
+            sorts: [{ property: 'Created Time', direction: 'ascending' }],
+            start_cursor: startCursor,
             });
-            
-            console.log(`Found ${response.results.length} unpublished missions in Notion`);
-            
-            const missions = response.results
+    
+            missions.push(
+            ...response.results
                 .map(page => {
-                    try {
-                        return this.convertNotionToMission(page);
-                    } catch (error) {
-                        console.error(`Failed to convert page ${page.id}:`, error);
-                        return null;
-                    }
-                })
-                .filter(mission => mission !== null); // Filtrer les conversions échouées
-
-            console.log(`Successfully converted ${missions.length} missions`);
-            return missions;
-        } catch (error) {
-            console.error('Error fetching missions from Notion:', error);
-            throw new Error(`Failed to fetch missions: ${error.message}`);
-        }
-    }
-
-    /**
-     * Met à jour le statut d'une mission
-     * @param {Mission} mission - Mission à mettre à jour
-     * @param {string} discordMessageId - ID du message Discord
-     * @returns {Promise<boolean>} Succès de la mise à jour
-     * @override
-     */
-    async updateMissionStatus(mission, discordMessageId) {
-        try {
-            if (!mission.id) {
-                throw new Error('Mission ID is required');
-            }
-
-            await this.client.pages.update({
-                page_id: mission.id,
-                properties: {
-                    "DiscordIdMessage": {
-                        "type": "number",
-                        "number": Number(discordMessageId)
-                    },
-                    "DiscordPublication": {
-                        "checkbox": true
-                    }
+                try {
+                    return this.convertNotionToMission(page);
+                } catch (error) {
+                    console.error(`Failed to convert page ${page.id}:`, error);
+                    return null;
                 }
-            });
-
-            // Mettre à jour l'objet mission localement
-            mission.markAsPublished(discordMessageId);
-            
-            console.log(`Successfully updated mission ${mission.id} with Discord message ID ${discordMessageId}`);
-            return true;
+                })
+                .filter(mission => mission !== null)
+            );
+    
+            hasMore = response.has_more;
+            startCursor = response.next_cursor;
+        }
+    
+        console.log(`Successfully converted ${missions.length} missions`);
+        return missions;
         } catch (error) {
-            console.error(`Error updating mission ${mission.id} status in Notion:`, error);
-            throw new Error(`Failed to update mission status: ${error.message}`);
+        console.error('Error fetching missions from Notion:', error);
+        throw new Error(`Failed to fetch missions: ${error.message}`);
         }
     }
-
+  
     /**
      * Vérifie la connexion à Notion
      * @returns {Promise<boolean>} État de la connexion
