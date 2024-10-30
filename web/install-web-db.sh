@@ -11,7 +11,7 @@ echo -e "${GREEN}=== Extension de la Base de Données pour l'Interface Web ===${
 
 # 1. Chargement des variables d'environnement
 echo -e "\n${YELLOW}1. Chargement de la configuration...${NC}"
-if [ -f ../bot/.env ]; then
+if [ -f ../.env ]; then
     export $(cat ../bot/.env | grep -v '^#' | xargs)
     echo -e "${GREEN}✓ Fichier .env chargé${NC}"
 else
