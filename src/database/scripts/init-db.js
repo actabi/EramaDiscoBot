@@ -12,9 +12,28 @@ async function initializeDatabase() {
         // Exécuter le schéma
         const client = await pool.connect();
         try {
+            // S'assurer que nous avons les droits sur le schéma public
+            await client.query('CREATE SCHEMA IF NOT EXISTS public');
+            await client.query('ALTER SCHEMA public OWNER TO botuser');
+            
             console.log('Creating database schema...');
-            await client.query(schema);
+            // Exécuter les commandes du schema une par une
+            const commands = schema.split(';').filter(cmd => cmd.trim());
+            for (const command of commands) {
+                if (command.trim()) {
+                    await client.query(command);
+                }
+            }
             console.log('Database schema created successfully');
+            
+            // Vérifier que les tables sont créées
+            const tables = await client.query(`
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            `);
+            console.log('Created tables:', tables.rows.map(row => row.table_name));
+
         } finally {
             client.release();
         }
@@ -25,6 +44,7 @@ async function initializeDatabase() {
 
     } catch (error) {
         console.error('Error initializing database:', error);
+        console.error('Full error:', error.stack);
         process.exit(1);
     } finally {
         await pool.end();
