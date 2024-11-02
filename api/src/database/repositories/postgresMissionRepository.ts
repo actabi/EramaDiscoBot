@@ -1,9 +1,10 @@
-const { pool } = require('../postgresql/connection');
-const IMissionRepository = require('../../interfaces/iMissionRepository');
-const Mission = require('../models/Mission');
+import { Pool } from 'pg';
+import IMissionRepository from '../interfaces/iMissionRepository';
+import Mission from '../models/Mission';
+import { pool } from '../config/postgresMissionRepository'; // Mettre à jour le chemin vers la connexion PostgreSQL
 
-class PostgresMissionRepository extends IMissionRepository {
-    async getUnpublishedMissions() {
+class PostgresMissionRepository implements IMissionRepository {
+    async getUnpublishedMissions(): Promise<Mission[]> {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
@@ -43,28 +44,26 @@ class PostgresMissionRepository extends IMissionRepository {
         }
     }
 
-    async updateMissionStatus(mission, discordMessageId) {
+    async updateMissionStatus(mission: Mission, discordMessageId: string): Promise<void> {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
 
             await client.query(`
                 UPDATE missions
-                SET is_published = TRUE,
-                    discord_message_id = $1
-                WHERE id = $2
+                SET discord_message_id = $1, is_published = TRUE
+                WHERE id = $2;
             `, [discordMessageId, mission.id]);
 
             await client.query('COMMIT');
-            return true;
         } catch (error) {
             await client.query('ROLLBACK');
             console.error('Error updating mission status:', error);
-            return false;
+            throw error;
         } finally {
             client.release();
         }
     }
 }
 
-module.exports = PostgresMissionRepository;
+export default PostgresMissionRepository;

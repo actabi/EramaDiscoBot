@@ -1,7 +1,15 @@
-const { Model, DataTypes } = require('sequelize');
-const { sequelize } = require('../config/database');
+import { Model, DataTypes } from 'sequelize';
+import { sequelize } from '../config/database';
 
-class User extends Model {}
+class User extends Model {
+  public id!: string;
+  public discordId!: string;
+  public username!: string;
+  public email!: string;
+  public avatar!: string;
+  public role!: 'admin' | 'freelance';
+  public lastLogin!: Date;
+}
 
 User.init({
   id: {
@@ -26,4 +34,4 @@ User.init({
   modelName: 'User',
 });
 
-module.exports = User;
+export default User;
