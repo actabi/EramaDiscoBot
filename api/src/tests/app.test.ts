@@ -4,12 +4,21 @@ import { Sequelize } from 'sequelize';
 import app from '../app';
 import { sequelize } from '../config/database';
 
-// Mock sequelize
-jest.mock('../config/database', () => ({
-  sequelize: {
-    sync: jest.fn().mockResolvedValue(null),
-  },
-}));
+// Mock plus complet de Sequelize
+jest.mock('../config/database', () => {
+    const mockSequelize = {
+      define: jest.fn(),
+      sync: jest.fn().mockResolvedValue(null),
+      model: jest.fn(),
+      models: {},
+      options: {
+        dialect: 'postgres',
+      },
+    };
+    return {
+      sequelize: mockSequelize,
+    };
+  });
 
 describe('App', () => {
   beforeAll(() => {
@@ -18,6 +27,14 @@ describe('App', () => {
 
   afterAll(() => {
     // Nettoyage après tous les tests
+  });
+
+  describe('API Tests', () => {
+    it('should respond to health check', async () => {
+      const response = await request(app).get('/health');
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'ok' });
+    });
   });
 
   describe('Server Setup', () => {
